@@ -1,0 +1,111 @@
+import fs from 'fs';
+import { Long, OpenChannel, OpenChannelUserInfo, TalkClient, TalkOpenChannel } from 'node-kakao';
+import { OpenChannelEvent } from 'node-kakao/dist/talk/event';
+import { ConfigInterface, RulesInterface } from './interface';
+import { login } from './login';
+import chalk from 'chalk';
+import figlet from 'figlet';
+
+export const config = JSON.parse(fs.readFileSync('config.json', { encoding: 'utf-8' })) as ConfigInterface;
+export const rules = JSON.parse(fs.readFileSync('rules.json', { encoding: 'utf-8' })) as RulesInterface;
+
+const banned = ["open.kakao.com"];
+let is_banned = false;
+
+let kickTargets: {
+  channelId: Long;
+  userId: Long;
+  timeout: NodeJS.Timeout;
+}[] = [];
+
+console.log(figlet.textSync('Autokick', 'Small Slant'));
+console.log(chalk.yellowBright(chalk.bold('Kakaotalk')), 'Openchat', chalk.redBright(chalk.underline('Autokick')));
+console.log();
+
+(async () => {
+  const loginData = await login();
+  const client = new TalkClient();
+  const clientLoginRes = await client.login({
+    userId: Long.fromString(config.userId),
+    deviceUUID: config.deviceUuid,
+    accessToken: loginData.result.accessToken,
+    refreshToken: loginData.result.refreshToken,
+  });
+
+  if (!clientLoginRes.success) throw new Error('Client login failed with status: ' + clientLoginRes.status);
+
+  console.log();
+
+  client.on('chat', (data, channel) => {
+    const sender = data.getSenderInfo(channel);
+    if (!sender) return;
+
+    console.log(
+      '[' + new Date().toLocaleString() + ']',
+      chalk.greenBright('[NEW MESG]'),
+      chalk.yellowBright('[' + channel.getDisplayName() + ']'),
+      chalk.cyanBright(sender.userId, '(' + sender.nickname + ')'),
+      ':',
+      data.chat.text,
+    );
+	const targets = kickTargets.filter((n) => n.channelId.eq(channel.channelId) && sender.userId.eq(n.userId));
+	if (data.chat.text) {
+	const chatString = data.chat.text;
+	is_banned = banned.findIndex(bl => chatString.indexOf(bl) > -1) > -1;
+	}
+	
+	if (data.chat.text && is_banned) {
+	const user = sender;
+
+	if (channel instanceof TalkOpenChannel) {
+	  console.log(
+		'[' + new Date().toLocaleString() + ']',
+		chalk.redBright('[DEL MESG]'),
+		chalk.yellowBright('[' + channel.getDisplayName() + ']'),
+		chalk.cyanBright(user.userId, '(' + user.nickname + ')'),
+	  );
+
+	  setTimeout(() => {
+		channel.hideChat(data.chat);
+	  }, Math.random() * 1 + rules.messageDeleteSeconds * 1000);
+	}
+	}
+
+	if (targets.length > 0) {
+	for (const target of targets) {
+	  clearTimeout(target.timeout);
+	}
+
+	kickTargets = kickTargets.filter((n) => !(n.channelId.eq(channel.channelId) && sender.userId.eq(n.userId)));
+	console.log(chalk.redBright('Removed target: ' + sender.nickname));
+	}
+  });
+
+  // Main process start
+  client.on('user_join', (joinLog, channel, user, feed) => {
+    console.log(
+      '[' + new Date().toLocaleString() + ']',
+      chalk.greenBright('[NEW USER]'),
+      chalk.yellowBright('[' + channel.getDisplayName() + ']'),
+      chalk.cyanBright(user.userId, '(' + user.nickname + ')'),
+    );
+
+  console.log(chalk.greenBright('[TARG ADD]'), chalk.cyanBright(user.userId, '(' + user.nickname + ')'));
+
+  const randomMinutes = Math.random() * 1 + rules.verificationTimeMinutes;
+
+  kickTargets.push({
+	channelId: channel.channelId,
+	userId: user.userId,
+	timeout: setTimeout(() => {
+	  console.log(
+		'[' + new Date().toLocaleString() + ']',
+		chalk.redBright('[KICKUSER]'),
+		chalk.yellowBright('[' + channel.getDisplayName() + ']'),
+		chalk.cyanBright(user.userId, '(' + user.nickname + ')'),
+	  );
+	  (client.channelList.get(channel.channelId) as TalkOpenChannel).kickUser(user);
+	}, 1000 * randomMinutes * 60),
+  });
+  });
+})();
