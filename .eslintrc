@@ -1,5 +1,5 @@
 module.exports = {
-  parser: '@typescript-eslint/parser', // use typescript eslint parser
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2020, // Let's use es2020!
     sourceType: 'module', // you are going to use npmjs.com right?
