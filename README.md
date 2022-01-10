@@ -1,7 +1,7 @@
 Modified version from [Alex4386](https://github.com/Alex4386/kakaotalk-openchat-autokick)
 
 # How do I run this?
-0. Rename configExample.json to config.json
+0. Rename config.example.json to config.json
 1. Install [NodeJS (LTS)](https://nodejs.org/en/download/)
 2. Open a Terminal (Linux) or CMD (Windows). Make sure you are in the folder "kakaotalk-bot"
 3. Install [Yarn](https://classic.yarnpkg.com/lang/en/docs/install)
